@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import requests
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from tqdm import tqdm
 import re
 from selenium.webdriver.support.ui import WebDriverWait
@@ -15,6 +15,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 import time
 from selenium.webdriver.common.action_chains import ActionChains
+import sys
 
 
 #Company list can be imported from excel or hardcoded as a list
@@ -22,31 +23,16 @@ company_lst = list(pd.read_excel("Company List.xlsx")['Company'])
 #Change this list according to titles you want to scrape for
 titles = ["Manager", "Director"]
 
-#Assigning active excel notebook change path accordingly
+#Initialize sourcing notebook
 workbook = openpyxl.Workbook()
-path = "Sourcing - Abs.xlsx"
+path = "Sourcing.xlsx"
 wb_act = workbook.active
+wb_act.title = "Emails"
+workbook.save(path)
+wb_act['A1'] = "Name"
+wb_act['B1'] = "Position"
+wb_act['C1'] = "Company"
 curr_row = 2
-
-#LINKEDIN AUTHENTICATION
-
-username_auth = input("Enter your Linkeden username: ")
-password_auth = input("Enter your Linkeden password: ")
-
-while True:
-    try: 
-        browser = webdriver.Chrome('chromedriver.exe')
-        browser.implicitly_wait(30)
-        browser.get("https://www.linkedin.com")
-        browser.find_element_by_class_name("nav__button-secondary").click()
-        username = browser.find_element_by_id("username")
-        username.send_keys(username_auth)
-        password = browser.find_element_by_id("password")
-        password.send_keys(password_auth)
-        password.submit()
-        break
-    except Exception as e:
-        browser.close()
 
 
 def secondary_security(browser):
@@ -77,7 +63,7 @@ def scrape(driver, url, row, company, page_limit=2):
             page_url = url
         else:
             page_url = title_url + "&page=" + str(page)
-        print("Scraping this URL: " + page_url)
+        # print("Scraping this URL: " + page_url)
         driver.get(page_url)
         time.sleep(2)
         
@@ -90,7 +76,7 @@ def scrape(driver, url, row, company, page_limit=2):
         soup = BeautifulSoup(source_code)
         iterator = zip(soup.findAll("span", {"class" : "name actor-name"}), soup.findAll("span", {"dir" : "ltr"}))
         for name, position in iterator:
-            print(name.contents[0] + "--->" + position.contents[0])
+            # print(name.contents[0] + "--->" + position.contents[0])
             wb_act['A' + str(row)] = name.contents[0]
             wb_act['B' + str(row)] = position.contents[0]
             wb_act['C' + str(row)] = company
@@ -105,10 +91,38 @@ def page_has_loaded(driver):
     page_state = driver.execute_script('return document.readyState;')
     return page_state == 'complete'
 
-# Use the below line if Linkeden asks for secondary security such as adding a phone number
+#BROWSER HEADLESS HEADLESS SETUP
+
+# chrome_options = Options()  
+# chrome_options.add_argument("--headless")  
+# chrome_options.add_argument("--window-size=1920x1080")
+# chrome_options.binary_location = '/Applications/Google Chrome'    
+
+# browser = webdriver.Chrome(executable_path="chromedriver.exe",   chrome_options=chrome_options)  
+
+#LINKEDIN AUTHENTICATION
+
+username_auth = "abhiraob@gmail.com"
+password_auth = "letme1nbr0"
+
+browser = webdriver.Chrome('chromedriver.exe')
+while True:
+    try: 
+	    browser.implicitly_wait(30)
+	    browser.get("https://www.linkedin.com")
+	    browser.find_element_by_class_name("nav__button-secondary").click()
+	    username = browser.find_element_by_id("username")
+	    username.send_keys(username_auth)
+	    password = browser.find_element_by_id("password")
+	    password.send_keys(password_auth)
+	    password.submit()
+	    break
+    except Exception as e:
+        browser.close()
+
 # secondary_security(browser)
 
-for company in company_lst:
+for company in tqdm(company_lst):
     #FILTER PAGE
     browser.get("https://www.linkedin.com/search/results/people/?origin=DISCOVER_FROM_SEARCH_HOME")
 
@@ -144,11 +158,16 @@ for company in company_lst:
     #BASE FILTER URL
     time.sleep(3)
     filter_url = browser.current_url
-    print("Filter URL is: " + filter_url)
+    # print("Filter URL is: " + filter_url)
 
     #URL FOR EACH TITLE
     for title in titles:
         title_url = filter_url + "&title=" + title
         curr_row = scrape(browser, title_url, curr_row, company)
+
+workbook.close()
+
+print("Linkedin email scraping is complete.")
+print("Your file is located at this path from the current directory: " + path)
 
 
